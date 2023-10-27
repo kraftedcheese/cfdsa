@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: codeserver-deployment
+  namespace: codeserver
+  labels:
+    app: codeapp
+    name: codeapp-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: codeapp
+      name: codeapp-po
+  template:
+    metadata:
+      name: codeapp-po
+      labels:
+        app: codeapp
+        name: codeapp-po
+    spec:
+      volumes:
+        - name: codeapp-vol
+          persistentVolumeClaim:
+            claimName: codeapp-pvc
+      containers:
+        - name: codeapp-container
+          image: lscr.io/linuxserver/code-server:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: codeserver-secret
+            - configMapRef:
+                name: codeserver-configmap
+          # resources:
+          #   limits:
+          #     memory: 256Mi
+          #     cpu: 200m
+          volumeMounts:
+            - mountPath: /config/workspace
+              name: codeapp-vol
+          ports:
+            - containerPort: 8443
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: codeapp-svc
+  namespace: codeserver
+  labels:
+    app: codeapp
+    name: codeapp-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: codeapp
+    name: codeapp-po
+  ports:
+    - port: 8443
+      targetPort: 8443
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: codeapp-ing
+  namespace: codeserver
+  labels:
+    app: codeapp
+    name: codeapp-ing
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: code-144.126.243.173.nip.io
+      http:
+        paths:
+          - pathType: Prefix
+            path: "/"
+            backend:
+              service:
+                name: codeapp-svc
+                port:
+                  number: 8443
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: codeapp-pvc
+  namespace: codeserver
+  labels:
+    app: codeapp
+    name: codeapp-pvc
+spec:
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: do-block-storage
+  accessModes:
+    - ReadWriteOnce
